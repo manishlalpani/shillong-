@@ -1,8 +1,7 @@
 // app/create/page.tsx
-
 import { db } from '@/lib/firebase';
 import { collection, query, where, getDocs, Timestamp } from 'firebase/firestore';
-import CreateForm from '@/components/dashboard/common-number/page'; // make sure the import path is correct
+import TeerForm from '@/components/dashboard/common-number/TeerForm';
 
 export default async function CreatePage() {
   const now = new Date();
@@ -25,13 +24,18 @@ export default async function CreatePage() {
     const docSnap = querySnapshot.docs[0];
     const data = docSnap.data();
     initialData = {
-      row1: data.row1 || ['', '', ''],
-      row2: data.row2 || ['', '', ''],
+      row1: data.row1 || [0, 0, 0],
+      row2: data.row2 || [0, 0, 0],
       docId: docSnap.id,
     };
   }
 
-  return <CreateForm initialData={initialData} />;
+  return (
+    <div className="container mx-auto py-8">
+      <h1 className="text-2xl font-bold mb-6">Teer Results Management</h1>
+      <TeerForm initialData={initialData} />
+    </div>
+  );
 }
 
 export const revalidate = 86400; // Revalidate once per day
