@@ -1,4 +1,4 @@
-import CommonNumber from "@/components/preview/common-number-pre/page";
+import CommonNumber from "@/app/(Home)/common-client";
 import Link from "next/link";
 import FooterFAQSection from "../Faq/page";
 import PostGrid from "../Post/page";

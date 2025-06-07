@@ -1,6 +1,6 @@
 import { db } from "@/lib/firebase";
 import { collection, getDocs, query, orderBy, limit } from "firebase/firestore";
-import PreviousResultsView from "@/components/preview/previous-result/page";
+import PreviousResultsView from "@/app/(Display)/previous-result/client";
 
 export default async function PreviousResultsPage() {
   const q = query(

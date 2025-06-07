@@ -1,5 +1,5 @@
 import React from 'react'
-import AddDailyResultForm from '@/components/dashboard/teer-result-today/page'
+import AddDailyResultForm from '@/app/dashboard/teer-result-today/client'
 
 export default function DailyTeerResult
 () {

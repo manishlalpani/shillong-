@@ -1,5 +1,5 @@
 // No "use client" here – this is a Server Component
-import FAQAccordion from "@/components/faq/page";
+import FAQAccordion from "@/app/Faq/client";
 
 export default function FooterFAQSection() {
   const faqData = [

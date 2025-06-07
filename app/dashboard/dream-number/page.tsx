@@ -1,6 +1,6 @@
 // app/dream-data/page.tsx
-import DreamForm from '@/components/dashboard/dream-number/DreamForm';
-import DreamList from '@/components/dashboard/dream-number/DreamList';
+import DreamForm from '@/app/dashboard/dream-number/DreamForm';
+import DreamList from '@/app/dashboard/dream-number/DreamList';
 export default function DreamNumberPage() {
   return (
     <main className="max-w-4xl mx-auto p-4 space-y-8">

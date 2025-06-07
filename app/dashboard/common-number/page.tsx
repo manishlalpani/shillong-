@@ -1,7 +1,7 @@
 // app/create/page.tsx
 import { db } from '@/lib/firebase';
 import { collection, query, where, getDocs, Timestamp } from 'firebase/firestore';
-import TeerForm from '@/components/dashboard/common-number/TeerForm';
+import TeerForm from '@/app/dashboard/common-number/client';
 
 export default async function CreatePage() {
   const now = new Date();
