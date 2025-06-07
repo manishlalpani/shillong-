@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, FormEvent } from 'react';
+import { useState, useEffect, FormEvent, useCallback } from 'react';
 import { db } from '@/lib/firebase';
 import {
   addDoc,
@@ -22,99 +22,76 @@ type TeerResult = {
   createdAt: Timestamp;
 };
 
+type TeerResultManagerProps = {
+  initialData: TeerResult | null;
+};
+
 const CACHE_KEY_PREFIX = 'teer_result_cache_';
 
-export default function TeerResultManager() {
+export default function TeerResultManager({ initialData }: TeerResultManagerProps) {
   const [selectedDate, setSelectedDate] = useState(() =>
     new Date().toISOString().split('T')[0]
   );
   const [row1, setRow1] = useState(['', '', '']);
   const [row2, setRow2] = useState(['', '', '']);
-  const [todayDoc, setTodayDoc] = useState<TeerResult | null>(null);
+  const [todayDoc, setTodayDoc] = useState<TeerResult | null>(initialData);
   const [editMode, setEditMode] = useState(false);
   const [editDocId, setEditDocId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   const cacheKey = `${CACHE_KEY_PREFIX}${selectedDate}`;
 
-  useEffect(() => {
-    // Check if cached data date matches selectedDate
-    const getCachedData = (): TeerResult | null => {
-      const cachedString = localStorage.getItem(cacheKey);
-      if (!cachedString) return null;
-      try {
-        const cached = JSON.parse(cachedString);
-        if (cached?.cachedForDate === selectedDate && cached.data) {
-          return cached.data as TeerResult;
-        }
-        return null;
-      } catch {
-        return null;
-      }
-    };
-    
-    const fetchDataByDate = async () => {
-      setLoading(true);
-      try {
-        // Check cache first (valid for the whole selectedDate)
-        const cachedData = getCachedData();
-        if (cachedData) {
-          setTodayDoc(cachedData);
-          setLoading(false);
-          return;
-        }
-
-        // Not cached or cache expired, fetch fresh
-        const selected = new Date(selectedDate);
-        const start = new Date(
-          selected.getFullYear(),
-          selected.getMonth(),
-          selected.getDate()
-        );
-        const end = new Date(
-          selected.getFullYear(),
-          selected.getMonth(),
-          selected.getDate() + 1
-        );
-        const startTS = Timestamp.fromDate(start);
-        const endTS = Timestamp.fromDate(end);
-
-        const q = query(
-          collection(db, 'teer_results'),
-          where('createdAt', '>=', startTS),
-          where('createdAt', '<', endTS),
-          limit(1)
-        );
-
-        const snapshot = await getDocs(q);
-        if (!snapshot.empty) {
-          const docSnap = snapshot.docs[0];
-          const data = { id: docSnap.id, ...docSnap.data() } as TeerResult;
-          setTodayDoc(data);
-
-          // Save to cache with date tag
-          localStorage.setItem(
-            cacheKey,
-            JSON.stringify({ cachedForDate: selectedDate, data })
-          );
-        } else {
-          setTodayDoc(null);
-          localStorage.removeItem(cacheKey);
-        }
-      } catch (error) {
-        console.error('Error fetching data:', error);
-        setTodayDoc(null);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchDataByDate();
-  }, [selectedDate, cacheKey]);
-
   const clearCacheForDate = (date: string) => {
     localStorage.removeItem(`${CACHE_KEY_PREFIX}${date}`);
   };
+
+  const fetchDataByDate = useCallback(async () => {
+    setLoading(true);
+    const cachedString = localStorage.getItem(cacheKey);
+    if (cachedString) {
+      try {
+        const cached = JSON.parse(cachedString);
+        if (cached?.cachedForDate === selectedDate) {
+          setTodayDoc(cached.data);
+          setLoading(false);
+          return;
+        }
+      } catch {
+        // fail silently
+      }
+    }
+
+    try {
+      const selected = new Date(selectedDate);
+      const start = new Date(selected.getFullYear(), selected.getMonth(), selected.getDate());
+      const end = new Date(selected.getFullYear(), selected.getMonth(), selected.getDate() + 1);
+      const q = query(
+        collection(db, 'teer_results'),
+        where('createdAt', '>=', Timestamp.fromDate(start)),
+        where('createdAt', '<', Timestamp.fromDate(end)),
+        limit(1)
+      );
+      const snapshot = await getDocs(q);
+      if (!snapshot.empty) {
+        const docSnap = snapshot.docs[0];
+        const data = { id: docSnap.id, ...docSnap.data() } as TeerResult;
+        setTodayDoc(data);
+        localStorage.setItem(cacheKey, JSON.stringify({ cachedForDate: selectedDate, data }));
+      } else {
+        setTodayDoc(null);
+        localStorage.removeItem(cacheKey);
+      }
+    } catch (error) {
+      console.error('Error fetching:', error);
+      setTodayDoc(null);
+    } finally {
+      setLoading(false);
+    }
+  }, [selectedDate, cacheKey]);
+
+  useEffect(() => {
+    fetchDataByDate();
+  }, [fetchDataByDate]);
 
   const handleInputChange = (
     row: 'row1' | 'row2',
@@ -128,16 +105,16 @@ export default function TeerResultManager() {
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    const parsedRow1 = row1.map((n) => parseInt(n));
-    const parsedRow2 = row2.map((n) => parseInt(n));
-    if ([...parsedRow1, ...parsedRow2].some(isNaN)) {
+
+    const parsedRow1 = row1.map((n) => parseInt(n.trim(), 10));
+    const parsedRow2 = row2.map((n) => parseInt(n.trim(), 10));
+    if ([...parsedRow1, ...parsedRow2].some((num) => isNaN(num))) {
       alert('Please enter all numbers correctly.');
       return;
     }
 
-    const dateTS = Timestamp.fromDate(new Date(selectedDate));
     setLoading(true);
-
+    const dateTS = Timestamp.fromDate(new Date(selectedDate));
     try {
       if (editMode && editDocId) {
         await updateDoc(doc(db, 'teer_results', editDocId), {
@@ -155,49 +132,12 @@ export default function TeerResultManager() {
         alert('Result added!');
       }
 
-      clearCacheForDate(selectedDate); // Clear cache on update to force refetch
-
-      // Reset form & states
+      clearCacheForDate(selectedDate);
       setRow1(['', '', '']);
       setRow2(['', '', '']);
       setEditMode(false);
       setEditDocId(null);
-
-      // Refetch fresh data and cache again
-      const selected = new Date(selectedDate);
-      const start = new Date(
-        selected.getFullYear(),
-        selected.getMonth(),
-        selected.getDate()
-      );
-      const end = new Date(
-        selected.getFullYear(),
-        selected.getMonth(),
-        selected.getDate() + 1
-      );
-      const startTS = Timestamp.fromDate(start);
-      const endTS = Timestamp.fromDate(end);
-
-      const q = query(
-        collection(db, 'teer_results'),
-        where('createdAt', '>=', startTS),
-        where('createdAt', '<', endTS),
-        limit(1)
-      );
-
-      const snapshot = await getDocs(q);
-      if (!snapshot.empty) {
-        const docSnap = snapshot.docs[0];
-        const data = { id: docSnap.id, ...docSnap.data() } as TeerResult;
-        setTodayDoc(data);
-        localStorage.setItem(
-          cacheKey,
-          JSON.stringify({ cachedForDate: selectedDate, data })
-        );
-      } else {
-        setTodayDoc(null);
-        localStorage.removeItem(cacheKey);
-      }
+      await fetchDataByDate();
     } catch (err) {
       console.error(err);
       alert('Error submitting data.');
@@ -208,8 +148,8 @@ export default function TeerResultManager() {
 
   const handleEdit = () => {
     if (!todayDoc) return;
-    setRow1(todayDoc.row1.map((n) => n.toString()));
-    setRow2(todayDoc.row2.map((n) => n.toString()));
+    setRow1(todayDoc.row1.map(String));
+    setRow2(todayDoc.row2.map(String));
     setEditMode(true);
     setEditDocId(todayDoc.id);
   };
@@ -220,8 +160,8 @@ export default function TeerResultManager() {
       setLoading(true);
       try {
         await deleteDoc(doc(db, 'teer_results', todayDoc.id));
-        setTodayDoc(null);
         clearCacheForDate(selectedDate);
+        setTodayDoc(null);
         alert('Deleted successfully!');
       } catch (error) {
         console.error(error);
@@ -237,8 +177,11 @@ export default function TeerResultManager() {
       <h2 className="text-2xl font-bold mb-4">Teer Result Manager</h2>
       <form onSubmit={handleSubmit} className="space-y-6">
         <div>
-          <label className="block font-semibold mb-1">Select Date</label>
+          <label className="block font-semibold mb-1" htmlFor="date-select">
+            Select Date
+          </label>
           <input
+            id="date-select"
             type="date"
             value={selectedDate}
             onChange={(e) => setSelectedDate(e.target.value)}
@@ -256,6 +199,7 @@ export default function TeerResultManager() {
                 value={value}
                 onChange={(e) => handleInputChange('row1', index, e.target.value)}
                 className="w-16 p-2 border rounded"
+                min={0}
               />
             ))}
           </div>
@@ -271,6 +215,7 @@ export default function TeerResultManager() {
                 value={value}
                 onChange={(e) => handleInputChange('row2', index, e.target.value)}
                 className="w-16 p-2 border rounded"
+                min={0}
               />
             ))}
           </div>
@@ -292,12 +237,8 @@ export default function TeerResultManager() {
       {todayDoc && !loading && (
         <div className="mt-8 p-4 border bg-gray-50 rounded shadow">
           <h3 className="font-bold mb-2">Results for {selectedDate}:</h3>
-          <p>
-            <strong>Row 1:</strong> {todayDoc.row1.join(', ')}
-          </p>
-          <p>
-            <strong>Row 2:</strong> {todayDoc.row2.join(', ')}
-          </p>
+          <p><strong>Row 1:</strong> {todayDoc.row1.join(', ')}</p>
+          <p><strong>Row 2:</strong> {todayDoc.row2.join(', ')}</p>
           <div className="flex gap-4 mt-4">
             <button
               onClick={handleEdit}
@@ -313,6 +254,10 @@ export default function TeerResultManager() {
             </button>
           </div>
         </div>
+      )}
+
+      {!todayDoc && !loading && (
+        <p className="mt-4 text-gray-700">No result found for selected date.</p>
       )}
     </div>
   );

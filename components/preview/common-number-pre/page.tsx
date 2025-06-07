@@ -1,15 +1,21 @@
 import React from 'react'
 import { collection, getDocs, orderBy, query } from 'firebase/firestore'
-import { db } from '@/lib/firebase'  // Your Firebase config export
+import { db } from '@/lib/firebase'
 
-export const revalidate = 86400  // 24 hours in seconds
+export const revalidate = 86400 // 24 hours in seconds
 
-async function getTeerData() {
+interface TeerItem {
+  id: string
+  row1: number[]
+  row2: number[]
+}
+
+async function getTeerData(): Promise<TeerItem[]> {
   const q = query(collection(db, 'teer_results'), orderBy('createdAt', 'desc'))
   const snapshot = await getDocs(q)
-  const data = snapshot.docs.map(doc => ({
+  const data: TeerItem[] = snapshot.docs.map((doc) => ({
     id: doc.id,
-    ...(doc.data() as any)
+    ...(doc.data() as Omit<TeerItem, 'id'>),
   }))
   return data
 }
@@ -29,16 +35,20 @@ export default async function CommonNumberPage() {
           </tr>
         </thead>
         <tbody>
-          {results.map((item: any) => (
+          {results.map((item) => (
             <React.Fragment key={item.id}>
               <tr className="bg-white hover:bg-green-50 transition">
-                {item.row1.map((num: number, idx: number) => (
-                  <td key={idx} className="border px-4 py-2 md:px-6 md:py-4">{num}</td>
+                {item.row1.map((num, idx) => (
+                  <td key={idx} className="border px-4 py-2 md:px-6 md:py-4">
+                    {num}
+                  </td>
                 ))}
               </tr>
               <tr className="bg-white hover:bg-green-50 transition">
-                {item.row2.map((num: number, idx: number) => (
-                  <td key={idx} className="border px-4 py-2 md:px-6 md:py-4">{num}</td>
+                {item.row2.map((num, idx) => (
+                  <td key={idx} className="border px-4 py-2 md:px-6 md:py-4">
+                    {num}
+                  </td>
                 ))}
               </tr>
             </React.Fragment>

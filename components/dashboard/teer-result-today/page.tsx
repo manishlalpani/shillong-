@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, ChangeEvent, FormEvent } from 'react';
+import { useState, useEffect, ChangeEvent, FormEvent, useCallback } from 'react';
 import { db } from '@/lib/firebase';
 import {
   addDoc,
@@ -12,9 +12,27 @@ import {
   deleteDoc,
   doc,
   updateDoc,
+  QueryDocumentSnapshot,
+  DocumentData,
 } from 'firebase/firestore';
 
 const STORAGE_KEY = 'teerDailyResultCache';
+
+type TeerDoc = {
+  id: string;
+  firstRound: number;
+  secondRound: number;
+  date: Timestamp;
+};
+
+type CacheData = {
+  date: string;
+  doc: TeerDoc | null;
+  firstRound: string;
+  secondRound: string;
+  editMode: boolean;
+  editDocId: string | null;
+};
 
 export default function AddDailyResultForm() {
   const [firstRound, setFirstRound] = useState('');
@@ -26,16 +44,16 @@ export default function AddDailyResultForm() {
 
   const [bulkInput, setBulkInput] = useState('');
   const [loading, setLoading] = useState(false);
-  const [todayDoc, setTodayDoc] = useState<any>(null);
+  const [todayDoc, setTodayDoc] = useState<TeerDoc | null>(null);
   const [editMode, setEditMode] = useState(false);
   const [editDocId, setEditDocId] = useState<string | null>(null);
 
-  const loadCache = () => {
+  const loadCache = (): CacheData | null => {
     if (typeof window === 'undefined') return null;
     try {
       const cacheString = localStorage.getItem(STORAGE_KEY);
       if (!cacheString) return null;
-      const cache = JSON.parse(cacheString);
+      const cache: CacheData = JSON.parse(cacheString);
       if (cache && cache.date === selectedDate) return cache;
       return null;
     } catch {
@@ -43,20 +61,12 @@ export default function AddDailyResultForm() {
     }
   };
 
-  const saveCache = (data: any) => {
+  const saveCache = (data: CacheData) => {
     if (typeof window === 'undefined') return;
-    const cacheData = {
-      date: selectedDate,
-      doc: data.todayDoc,
-      firstRound: data.firstRound,
-      secondRound: data.secondRound,
-      editMode: data.editMode,
-      editDocId: data.editDocId,
-    };
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(cacheData));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
   };
 
-  const fetchDataByDate = async () => {
+  const fetchDataByDate = useCallback(async () => {
     const selected = new Date(selectedDate);
     const start = new Date(selected.getFullYear(), selected.getMonth(), selected.getDate());
     const end = new Date(selected.getFullYear(), selected.getMonth(), selected.getDate() + 1);
@@ -71,10 +81,12 @@ export default function AddDailyResultForm() {
 
     const snapshot = await getDocs(q);
     if (!snapshot.empty) {
+      const docSnap: QueryDocumentSnapshot<DocumentData> = snapshot.docs[0];
       const docData = {
-        id: snapshot.docs[0].id,
-        ...snapshot.docs[0].data(),
-      };
+        id: docSnap.id,
+        ...docSnap.data(),
+      } as TeerDoc;
+
       setTodayDoc(docData);
       setFirstRound(docData.firstRound.toString());
       setSecondRound(docData.secondRound.toString());
@@ -82,7 +94,8 @@ export default function AddDailyResultForm() {
       setEditDocId(docData.id);
 
       saveCache({
-        todayDoc: docData,
+        date: selectedDate,
+        doc: docData,
         firstRound: docData.firstRound.toString(),
         secondRound: docData.secondRound.toString(),
         editMode: true,
@@ -96,14 +109,15 @@ export default function AddDailyResultForm() {
       setEditDocId(null);
 
       saveCache({
-        todayDoc: null,
+        date: selectedDate,
+        doc: null,
         firstRound: '',
         secondRound: '',
         editMode: false,
         editDocId: null,
       });
     }
-  };
+  }, [selectedDate]);
 
   useEffect(() => {
     const cachedData = loadCache();
@@ -116,9 +130,10 @@ export default function AddDailyResultForm() {
     } else {
       fetchDataByDate();
     }
-  }, [selectedDate]);
+  }, [selectedDate, fetchDataByDate]);
 
-  const handleChange = (setter: any) => (e: ChangeEvent<HTMLInputElement>) => setter(e.target.value);
+  const handleChange = (setter: React.Dispatch<React.SetStateAction<string>>) => (e: ChangeEvent<HTMLInputElement>) =>
+    setter(e.target.value);
 
   const handleBulkInputChange = (e: ChangeEvent<HTMLTextAreaElement>) => {
     setBulkInput(e.target.value);
@@ -207,7 +222,8 @@ export default function AddDailyResultForm() {
       setEditMode(false);
       setEditDocId(null);
       saveCache({
-        todayDoc: null,
+        date: selectedDate,
+        doc: null,
         firstRound: '',
         secondRound: '',
         editMode: false,
@@ -287,8 +303,10 @@ export default function AddDailyResultForm() {
         <div className="mt-8">
           <h4 className="text-md font-semibold mb-2">Existing Entry</h4>
           <p>
-            Date: <strong>{selectedDate}</strong><br />
-            First Round: <strong>{todayDoc.firstRound}</strong><br />
+            Date: <strong>{selectedDate}</strong>
+            <br />
+            First Round: <strong>{todayDoc.firstRound}</strong>
+            <br />
             Second Round: <strong>{todayDoc.secondRound}</strong>
           </p>
           <button
