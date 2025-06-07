@@ -9,6 +9,7 @@ import {
   orderBy,
   deleteDoc,
   doc,
+  Timestamp,
 } from "firebase/firestore";
 import { Button } from "@/components/ui/button";
 import DreamForm from "./DreamForm";
@@ -19,7 +20,7 @@ interface DreamEntry {
   direct: string;
   house: string;
   ending: string;
-  createdAt?: any;
+  createdAt?: Timestamp;
 }
 
 const CACHE_KEY = "dreams_cache";

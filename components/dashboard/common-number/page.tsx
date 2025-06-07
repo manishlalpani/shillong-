@@ -19,7 +19,7 @@ type TeerResult = {
   id: string;
   row1: number[];
   row2: number[];
-  createdAt: any;
+  createdAt: Timestamp;
 };
 
 const CACHE_KEY_PREFIX = 'teer_result_cache_';
@@ -37,22 +37,22 @@ export default function TeerResultManager() {
 
   const cacheKey = `${CACHE_KEY_PREFIX}${selectedDate}`;
 
-  // Check if cached data date matches selectedDate
-  const getCachedData = (): TeerResult | null => {
-    const cachedString = localStorage.getItem(cacheKey);
-    if (!cachedString) return null;
-    try {
-      const cached = JSON.parse(cachedString);
-      if (cached?.cachedForDate === selectedDate && cached.data) {
-        return cached.data as TeerResult;
-      }
-      return null;
-    } catch {
-      return null;
-    }
-  };
-
   useEffect(() => {
+    // Check if cached data date matches selectedDate
+    const getCachedData = (): TeerResult | null => {
+      const cachedString = localStorage.getItem(cacheKey);
+      if (!cachedString) return null;
+      try {
+        const cached = JSON.parse(cachedString);
+        if (cached?.cachedForDate === selectedDate && cached.data) {
+          return cached.data as TeerResult;
+        }
+        return null;
+      } catch {
+        return null;
+      }
+    };
+    
     const fetchDataByDate = async () => {
       setLoading(true);
       try {
@@ -110,7 +110,7 @@ export default function TeerResultManager() {
     };
 
     fetchDataByDate();
-  }, [selectedDate]);
+  }, [selectedDate, cacheKey]);
 
   const clearCacheForDate = (date: string) => {
     localStorage.removeItem(`${CACHE_KEY_PREFIX}${date}`);

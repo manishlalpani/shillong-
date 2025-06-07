@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { signInWithEmailAndPassword, signInWithPopup, GoogleAuthProvider } from 'firebase/auth';
+import { FirebaseError } from 'firebase/app';
 import { auth } from '@/lib/firebase';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
@@ -30,8 +31,12 @@ export default function SignInPage() {
         alert('Not Authorized Person');
         await auth.signOut();
       }
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      if (err instanceof FirebaseError) {
+        setError(err.message);
+      } else {
+        setError('An unexpected error occurred');
+      }
     } finally {
       setLoading(false);
     }
@@ -50,7 +55,7 @@ export default function SignInPage() {
         alert('Not Authorized Person');
         await auth.signOut();
       }
-    } catch (err) {
+    } catch {
       setError('Google sign-in failed');
     } finally {
       setLoading(false);

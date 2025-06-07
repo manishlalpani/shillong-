@@ -28,7 +28,7 @@ export default function DreamForm({
   const [ending, setEnding] = useState(entryToEdit?.ending || "");
   const [message, setMessage] = useState<string | null>(null);
 
-  const handleSubmit = async (e: any) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     const entry = {
