@@ -48,7 +48,8 @@ export default function AddDailyResultForm() {
   const [editMode, setEditMode] = useState(false);
   const [editDocId, setEditDocId] = useState<string | null>(null);
 
-  const loadCache = (): CacheData | null => {
+  // Memoize the loadCache function to prevent unnecessary effect runs
+  const loadCache = useCallback((): CacheData | null => {
     if (typeof window === 'undefined') return null;
     try {
       const cacheString = localStorage.getItem(STORAGE_KEY);
@@ -59,7 +60,7 @@ export default function AddDailyResultForm() {
     } catch {
       return null;
     }
-  };
+  }, [selectedDate]); // Add selectedDate as dependency since it's used inside
 
   const saveCache = (data: CacheData) => {
     if (typeof window === 'undefined') return;
@@ -130,7 +131,7 @@ export default function AddDailyResultForm() {
     } else {
       fetchDataByDate();
     }
-  }, [selectedDate, fetchDataByDate]);
+  }, [selectedDate, fetchDataByDate, loadCache]);
 
   const handleChange = (setter: React.Dispatch<React.SetStateAction<string>>) => (e: ChangeEvent<HTMLInputElement>) =>
     setter(e.target.value);

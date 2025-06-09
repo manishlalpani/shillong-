@@ -73,7 +73,7 @@ const TeerResultTodayClient: React.FC<TeerResultTodayClientProps> = ({ initialDa
         <h2 className="text-xl font-bold mb-4">Teer Result for Today</h2>
         <p>{loading ? 'Loading...' : 'No result found for today.'}</p>
       </div>
-    );
+    ); 
   }
 
   // Render results table

@@ -1,7 +1,2 @@
-import type { NextConfig } from "next";
+// This file should be deleted to avoid confusion with next.config.mjs
 
-const nextConfig: NextConfig = {
-  /* config options here */
-};
-
-export default nextConfig;
