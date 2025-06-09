@@ -1,56 +1,46 @@
-// app/dashboard/teer-result-today/page.tsx
-import { collection, getDocs, query, where, Timestamp } from 'firebase/firestore';
+// app/(Display)/teer-result-today/page.tsx
+import { doc, getDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import TeerResultTodayClient from './client';
 
+export const revalidate = 3600; // Revalidate every hour instead of daily for more up-to-date results
 
-interface FirestoreTeerResult {
-  firstRound?: number | number[];
-  secondRound?: number | number[];
-  date: Timestamp;
+interface TeerResultData {
+  firstRound: number[];
+  secondRound: number[];
+  date: string;
 }
-
-function formatDateISO(date: Date): string {
-  return date.toISOString().split('T')[0];
-}
-
-function getStartEndTimestamps(dateStr: string) {
-  const date = new Date(dateStr);
-  const start = Timestamp.fromDate(new Date(date.getFullYear(), date.getMonth(), date.getDate()));
-  const end = Timestamp.fromDate(new Date(date.getFullYear(), date.getMonth(), date.getDate() + 1));
-  return { start, end };
-}
-
-export const revalidate = 86400; // Revalidate once per day
 
 export default async function TeerResultTodayPage() {
-  const todayISO = formatDateISO(new Date());
-  const { start, end } = getStartEndTimestamps(todayISO);
-
-  const resultsQuery = query(
-    collection(db, 'teer_daily_results'),
-    where('date', '>=', start),
-    where('date', '<', end)
-  );
-
-  const snapshot = await getDocs(resultsQuery);
+  // Get today's date in ISO format (YYYY-MM-DD)
+  const todayISO = new Date().toISOString().split('T')[0];
   
-  let initialData = null;
-  if (!snapshot.empty) {
-    const docData = snapshot.docs[0].data() as FirestoreTeerResult;
-    initialData = {
-      firstRound: Array.isArray(docData.firstRound) 
-        ? docData.firstRound 
-        : docData.firstRound !== undefined 
-          ? [Number(docData.firstRound)] 
-          : [],
-      secondRound: Array.isArray(docData.secondRound)
-        ? docData.secondRound
-        : docData.secondRound !== undefined
-          ? [Number(docData.secondRound)]
-          : [],
-      date: todayISO
-    };
+  // Fetch data server-side for initial render
+  let initialData: TeerResultData | null = null;
+  
+  try {
+    const docRef = doc(db, 'teer_daily_results', todayISO);
+    const docSnap = await getDoc(docRef);
+    
+    if (docSnap.exists()) {
+      const data = docSnap.data();
+      initialData = {
+        firstRound: Array.isArray(data.firstRound) 
+          ? data.firstRound.map(Number) 
+          : data.firstRound !== undefined 
+            ? [Number(data.firstRound)] 
+            : [],
+        secondRound: Array.isArray(data.secondRound)
+          ? data.secondRound.map(Number)
+          : data.secondRound !== undefined
+            ? [Number(data.secondRound)]
+            : [],
+        date: todayISO
+      };
+    }
+  } catch (error) {
+    console.error('Error fetching initial data:', error);
+    // Continue with null initialData
   }
 
   return <TeerResultTodayClient initialData={initialData} />;
