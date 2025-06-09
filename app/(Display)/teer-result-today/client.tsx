@@ -2,7 +2,7 @@
 'use client';
 
 import React, { useEffect, useState, useCallback } from 'react';
-import { doc, getDoc } from 'firebase/firestore';
+import { collection, getDocs, query, where, Timestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 
 interface TeerResultData {
@@ -25,13 +25,11 @@ const TeerResultTodayClient: React.FC<TeerResultTodayClientProps> = ({ initialDa
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      // 1. Check cache first (synchronous)
       const now = Date.now();
       const cachedString = localStorage.getItem(CACHE_KEY);
-      
+
       if (cachedString) {
         const { data, timestamp } = JSON.parse(cachedString);
-        // Use cache if it's less than 15 minutes old
         if (now - timestamp < CACHE_EXPIRY) {
           setResult(data);
           setLoading(false);
@@ -39,34 +37,47 @@ const TeerResultTodayClient: React.FC<TeerResultTodayClientProps> = ({ initialDa
         }
       }
 
-      // 2. Fetch from Firestore if no valid cache
-      const todayISO = new Date().toISOString().split('T')[0];
-      const docRef = doc(db, 'teer_daily_results', todayISO);
-      const docSnap = await getDoc(docRef);
-      
-      if (docSnap.exists()) {
+      // Query Firestore using the `date` field (type Timestamp)
+      const today = new Date();
+      const startOfDay = new Date(today.setHours(0, 0, 0, 0));
+      const endOfDay = new Date(today.setHours(23, 59, 59, 999));
+
+      const teerQuery = query(
+        collection(db, 'teer_daily_results'),
+        where('date', '>=', Timestamp.fromDate(startOfDay)),
+        where('date', '<=', Timestamp.fromDate(endOfDay))
+      );
+
+      const querySnapshot = await getDocs(teerQuery);
+
+      if (!querySnapshot.empty) {
+        const docSnap = querySnapshot.docs[0];
         const data = docSnap.data();
+
         const newResult: TeerResultData = {
-          firstRound: Array.isArray(data.firstRound) 
-            ? data.firstRound.map(Number) 
-            : data.firstRound !== undefined 
-              ? [Number(data.firstRound)] 
+          firstRound: Array.isArray(data.firstRound)
+            ? data.firstRound.map(Number)
+            : data.firstRound !== undefined
+              ? [Number(data.firstRound)]
               : [],
           secondRound: Array.isArray(data.secondRound)
             ? data.secondRound.map(Number)
             : data.secondRound !== undefined
               ? [Number(data.secondRound)]
               : [],
-          date: todayISO
+          date: data.date.toDate().toISOString().split('T')[0],
         };
+
         setResult(newResult);
-        
-        // Update cache with timestamp
+
         localStorage.setItem(CACHE_KEY, JSON.stringify({
           data: newResult,
-          timestamp: now
+          timestamp: now,
         }));
+      } else {
+        setResult(null); // no result found
       }
+
     } catch (error) {
       console.error('Error fetching data:', error);
     } finally {
@@ -75,20 +86,17 @@ const TeerResultTodayClient: React.FC<TeerResultTodayClientProps> = ({ initialDa
   }, []);
 
   useEffect(() => {
-    // Skip client-side fetch if we already have initial data from server
     if (initialData) {
-      // Still update the cache with the server data
       localStorage.setItem(CACHE_KEY, JSON.stringify({
         data: initialData,
         timestamp: Date.now()
       }));
       return;
     }
-    
+
     fetchData();
   }, [initialData, fetchData]);
 
-  // Render loading state
   if (loading) {
     return (
       <div className="p-4 max-w-lg mx-auto">
@@ -101,7 +109,6 @@ const TeerResultTodayClient: React.FC<TeerResultTodayClientProps> = ({ initialDa
     );
   }
 
-  // Render no data state
   if (!result || result.firstRound.length === 0) {
     return (
       <div className="p-4 max-w-lg mx-auto">
@@ -111,10 +118,9 @@ const TeerResultTodayClient: React.FC<TeerResultTodayClientProps> = ({ initialDa
           <p className="text-sm text-yellow-600 mt-2">Results are typically updated after 3:30 PM and 4:30 PM.</p>
         </div>
       </div>
-    ); 
+    );
   }
 
-  // Format date for display
   const displayDate = new Date(result.date).toLocaleDateString('en-US', {
     weekday: 'long',
     year: 'numeric',
@@ -122,7 +128,6 @@ const TeerResultTodayClient: React.FC<TeerResultTodayClientProps> = ({ initialDa
     day: 'numeric'
   });
 
-  // Render results table
   return (
     <div className="p-4 max-w-lg mx-auto">
       <h2 className="text-xl font-bold mb-4">Teer Result for {displayDate}</h2>
