@@ -11,6 +11,8 @@ import {
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 
+
+
 const CACHE_KEY_PREFIX = 'teer_result_';
 
 interface TeerResult {
@@ -213,10 +215,6 @@ const TeerForm: React.FC<TeerFormProps> = ({ initialData = null }) => {
         Teer Result - {today}
       </h2>
 
-      {loading ? (
-        <p className="text-center text-gray-500">Loading...</p>
-      ) : (
-        <>
           <div className="space-y-6">
             <div>
               <label className="block font-semibold mb-2 text-gray-700">Row 1</label>
@@ -269,8 +267,8 @@ const TeerForm: React.FC<TeerFormProps> = ({ initialData = null }) => {
               ))
             )}
           </div>
-        </>
-      )}
+      
+      
     </div>
   );
 };
