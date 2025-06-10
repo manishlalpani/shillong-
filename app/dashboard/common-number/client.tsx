@@ -11,8 +11,6 @@ import {
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 
-
-
 const CACHE_KEY_PREFIX = 'teer_result_';
 
 interface TeerResult {
@@ -42,7 +40,6 @@ const TeerForm: React.FC<TeerFormProps> = ({ initialData = null }) => {
   const [row1, setRow1] = useState<string[]>(['', '', '']);
   const [row2, setRow2] = useState<string[]>(['', '', '']);
   const [todayDoc, setTodayDoc] = useState<TeerResult | null>(null);
-  const [loading, setLoading] = useState<boolean>(false);
   const [allResults, setAllResults] = useState<TeerResult[]>([]);
 
   useEffect(() => {
@@ -66,7 +63,6 @@ const TeerForm: React.FC<TeerFormProps> = ({ initialData = null }) => {
       querySnapshot.forEach((docSnap) => {
         allResultsData.push(docSnap.data() as TeerResult);
       });
-      // Sort results descending by date for easier reading
       allResultsData.sort((a, b) => (a.date < b.date ? 1 : -1));
       setAllResults(allResultsData);
     } catch (error) {
@@ -75,7 +71,6 @@ const TeerForm: React.FC<TeerFormProps> = ({ initialData = null }) => {
   }, []);
 
   const fetchData = useCallback(async () => {
-    setLoading(true);
     try {
       if (!initialData) {
         let cached: TeerResult | null = null;
@@ -91,7 +86,6 @@ const TeerForm: React.FC<TeerFormProps> = ({ initialData = null }) => {
           setRow1(cached.row1.map(String));
           setRow2(cached.row2.map(String));
           await fetchAllResults();
-          setLoading(false);
           return;
         }
       }
@@ -111,8 +105,6 @@ const TeerForm: React.FC<TeerFormProps> = ({ initialData = null }) => {
       await fetchAllResults();
     } catch (error) {
       console.error('Error fetching data:', error);
-    } finally {
-      setLoading(false);
     }
   }, [today, initialData, fetchAllResults]);
 
@@ -215,60 +207,58 @@ const TeerForm: React.FC<TeerFormProps> = ({ initialData = null }) => {
         Teer Result - {today}
       </h2>
 
-          <div className="space-y-6">
-            <div>
-              <label className="block font-semibold mb-2 text-gray-700">Row 1</label>
-              {renderInputs(row1, setRow1)}
-            </div>
-            <div>
-              <label className="block font-semibold mb-2 text-gray-700">Row 2</label>
-              {renderInputs(row2, setRow2)}
-            </div>
-          </div>
+      <div className="space-y-6">
+        <div>
+          <label className="block font-semibold mb-2 text-gray-700">Row 1</label>
+          {renderInputs(row1, setRow1)}
+        </div>
+        <div>
+          <label className="block font-semibold mb-2 text-gray-700">Row 2</label>
+          {renderInputs(row2, setRow2)}
+        </div>
+      </div>
 
-          <button
-            onClick={handleSave}
-            className="mt-8 w-full bg-blue-600 text-white py-3 rounded-md hover:bg-blue-700 transition-colors duration-200"
-            type="button"
-          >
-            Save Result
-          </button>
+      <button
+        onClick={handleSave}
+        className="mt-8 w-full bg-blue-600 text-white py-3 rounded-md hover:bg-blue-700 transition-colors duration-200"
+        type="button"
+      >
+        Save Result
+      </button>
 
-          <h3 className="text-xl font-semibold mt-12 mb-4 text-gray-900 border-b pb-2">
-            All Results
-          </h3>
-          <div className="max-h-56 overflow-y-auto pr-3 space-y-3 scrollbar-thin scrollbar-thumb-blue-400 scrollbar-track-gray-200">
-            {allResults.length === 0 ? (
-              <p className="text-gray-500 text-sm italic text-center">No results found.</p>
-            ) : (
-              allResults.map((r) => (
-                <div
-                  key={r.date}
-                  className="text-sm p-3 border border-gray-300 rounded-lg bg-white shadow-sm hover:shadow-md transition-shadow duration-200"
-                >
-                  <div className="flex justify-between items-center">
-                    <time className="font-semibold text-gray-800">{r.date}</time>
-                    <span className="text-xs text-gray-500 italic">
-                      {new Date(r.updatedAt).toLocaleTimeString([], {
-                        hour: '2-digit',
-                        minute: '2-digit',
-                      })}
-                    </span>
-                  </div>
-                  <div className="mt-1 text-gray-700">
-                    <p>
-                      <span className="font-medium">Row 1:</span> {r.row1.join(', ')}
-                    </p>
-                    <p>
-                      <span className="font-medium">Row 2:</span> {r.row2.join(', ')}
-                    </p>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-      
-      
+      <h3 className="text-xl font-semibold mt-12 mb-4 text-gray-900 border-b pb-2">
+        All Results
+      </h3>
+      <div className="max-h-56 overflow-y-auto pr-3 space-y-3 scrollbar-thin scrollbar-thumb-blue-400 scrollbar-track-gray-200">
+        {allResults.length === 0 ? (
+          <p className="text-gray-500 text-sm italic text-center">No results found.</p>
+        ) : (
+          allResults.map((r) => (
+            <div
+              key={r.date}
+              className="text-sm p-3 border border-gray-300 rounded-lg bg-white shadow-sm hover:shadow-md transition-shadow duration-200"
+            >
+              <div className="flex justify-between items-center">
+                <time className="font-semibold text-gray-800">{r.date}</time>
+                <span className="text-xs text-gray-500 italic">
+                  {new Date(r.updatedAt).toLocaleTimeString([], {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  })}
+                </span>
+              </div>
+              <div className="mt-1 text-gray-700">
+                <p>
+                  <span className="font-medium">Row 1:</span> {r.row1.join(', ')}
+                </p>
+                <p>
+                  <span className="font-medium">Row 2:</span> {r.row2.join(', ')}
+                </p>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
     </div>
   );
 };
