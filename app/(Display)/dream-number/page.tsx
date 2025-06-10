@@ -1,11 +1,5 @@
 import { db } from "@/lib/firebase";
-import {
-  collection,
-  getDocs,
-  orderBy,
-  query,
-  Timestamp,
-} from "firebase/firestore";
+import { collection, getDocs, Timestamp } from "firebase/firestore";
 import { Card, CardContent } from "@/components/ui/card";
 import {
   Table,
@@ -49,7 +43,6 @@ export default async function DreamNumbersPage() {
     });
   });
 
-  // Sort on client if createdAt is available
   const sortedEntries = entries.sort((a, b) => {
     const aTime = a.createdAt?.seconds || 0;
     const bTime = b.createdAt?.seconds || 0;
