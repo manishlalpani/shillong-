@@ -12,6 +12,8 @@ import {
   deleteDoc,
   doc,
   updateDoc,
+  orderBy,
+  limit,
   QueryDocumentSnapshot,
   DocumentData,
 } from 'firebase/firestore';
@@ -37,18 +39,31 @@ type CacheData = {
 export default function AddDailyResultForm() {
   const [firstRound, setFirstRound] = useState('');
   const [secondRound, setSecondRound] = useState('');
-  const [selectedDate, setSelectedDate] = useState(() => {
-    const today = new Date();
-    return today.toISOString().split('T')[0];
-  });
-
+  const [selectedDate, setSelectedDate] = useState('');
   const [bulkInput, setBulkInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [todayDoc, setTodayDoc] = useState<TeerDoc | null>(null);
   const [editMode, setEditMode] = useState(false);
   const [editDocId, setEditDocId] = useState<string | null>(null);
 
-  // Memoize the loadCache function to prevent unnecessary effect runs
+  // Fetch latest date from Firestore on mount
+  useEffect(() => {
+    const getLatestDate = async () => {
+      const q = query(collection(db, 'teer_daily_results'), orderBy('date', 'desc'), limit(1));
+      const snapshot = await getDocs(q);
+      if (!snapshot.empty) {
+        const docSnap = snapshot.docs[0];
+        const latestDate = docSnap.data().date.toDate();
+        const latestDateStr = latestDate.toISOString().split('T')[0];
+        setSelectedDate(latestDateStr);
+      } else {
+        const today = new Date();
+        setSelectedDate(today.toISOString().split('T')[0]);
+      }
+    };
+    getLatestDate();
+  }, []);
+
   const loadCache = useCallback((): CacheData | null => {
     if (typeof window === 'undefined') return null;
     try {
@@ -60,7 +75,7 @@ export default function AddDailyResultForm() {
     } catch {
       return null;
     }
-  }, [selectedDate]); // Add selectedDate as dependency since it's used inside
+  }, [selectedDate]);
 
   const saveCache = (data: CacheData) => {
     if (typeof window === 'undefined') return;
@@ -83,44 +98,25 @@ export default function AddDailyResultForm() {
     const snapshot = await getDocs(q);
     if (!snapshot.empty) {
       const docSnap: QueryDocumentSnapshot<DocumentData> = snapshot.docs[0];
-      const docData = {
-        id: docSnap.id,
-        ...docSnap.data(),
-      } as TeerDoc;
-
+      const docData = { id: docSnap.id, ...docSnap.data() } as TeerDoc;
       setTodayDoc(docData);
       setFirstRound(docData.firstRound.toString());
       setSecondRound(docData.secondRound.toString());
       setEditMode(true);
       setEditDocId(docData.id);
-
-      saveCache({
-        date: selectedDate,
-        doc: docData,
-        firstRound: docData.firstRound.toString(),
-        secondRound: docData.secondRound.toString(),
-        editMode: true,
-        editDocId: docData.id,
-      });
+      saveCache({ date: selectedDate, doc: docData, firstRound: docData.firstRound.toString(), secondRound: docData.secondRound.toString(), editMode: true, editDocId: docData.id });
     } else {
       setTodayDoc(null);
       setFirstRound('');
       setSecondRound('');
       setEditMode(false);
       setEditDocId(null);
-
-      saveCache({
-        date: selectedDate,
-        doc: null,
-        firstRound: '',
-        secondRound: '',
-        editMode: false,
-        editDocId: null,
-      });
+      saveCache({ date: selectedDate, doc: null, firstRound: '', secondRound: '', editMode: false, editDocId: null });
     }
   }, [selectedDate]);
 
   useEffect(() => {
+    if (!selectedDate) return;
     const cachedData = loadCache();
     if (cachedData) {
       setTodayDoc(cachedData.doc);
@@ -133,27 +129,20 @@ export default function AddDailyResultForm() {
     }
   }, [selectedDate, fetchDataByDate, loadCache]);
 
-  const handleChange = (setter: React.Dispatch<React.SetStateAction<string>>) => (e: ChangeEvent<HTMLInputElement>) =>
-    setter(e.target.value);
-
-  const handleBulkInputChange = (e: ChangeEvent<HTMLTextAreaElement>) => {
-    setBulkInput(e.target.value);
-  };
+  const handleChange = (setter: React.Dispatch<React.SetStateAction<string>>) => (e: ChangeEvent<HTMLInputElement>) => setter(e.target.value);
+  const handleBulkInputChange = (e: ChangeEvent<HTMLTextAreaElement>) => setBulkInput(e.target.value);
 
   const handleBulkUpload = async () => {
     const lines = bulkInput.split('\n');
     setLoading(true);
-
     try {
       for (const line of lines) {
         const [dateStr, round1, round2] = line.trim().split(',');
         if (!dateStr || !round1 || !round2) continue;
-
         const date = new Date(dateStr);
         const dateTS = Timestamp.fromDate(date);
         const num1 = parseInt(round1.trim());
         const num2 = parseInt(round2.trim());
-
         if (!isNaN(num1) && !isNaN(num2)) {
           await addDoc(collection(db, 'teer_daily_results'), {
             date: dateTS,
@@ -176,15 +165,12 @@ export default function AddDailyResultForm() {
     e.preventDefault();
     const num1 = parseInt(firstRound);
     const num2 = parseInt(secondRound);
-
     if (isNaN(num1) || isNaN(num2)) {
       alert('Enter valid numbers for both rounds.');
       return;
     }
-
     const dateTS = Timestamp.fromDate(new Date(selectedDate));
     setLoading(true);
-
     try {
       if (editMode && editDocId) {
         await updateDoc(doc(db, 'teer_daily_results', editDocId), {
@@ -213,7 +199,6 @@ export default function AddDailyResultForm() {
   const handleDelete = async () => {
     if (!todayDoc) return;
     if (!confirm('Are you sure you want to delete this result?')) return;
-
     try {
       await deleteDoc(doc(db, 'teer_daily_results', todayDoc.id));
       alert('Result deleted successfully!');
@@ -222,14 +207,7 @@ export default function AddDailyResultForm() {
       setSecondRound('');
       setEditMode(false);
       setEditDocId(null);
-      saveCache({
-        date: selectedDate,
-        doc: null,
-        firstRound: '',
-        secondRound: '',
-        editMode: false,
-        editDocId: null,
-      });
+      saveCache({ date: selectedDate, doc: null, firstRound: '', secondRound: '', editMode: false, editDocId: null });
     } catch (err) {
       console.error(err);
       alert('Error deleting document.');
@@ -237,55 +215,36 @@ export default function AddDailyResultForm() {
   };
 
   return (
-    <div className="p-6 max-w-xl mx-auto">
-      <h2 className="text-2xl font-bold mb-4">Teer Result Entry</h2>
+    <div className="p-4 max-w-2xl mx-auto">
+      <h2 className="text-3xl font-bold mb-6 text-center">Teer Result Entry</h2>
 
-      <form onSubmit={handleSubmit} className="space-y-6">
+      <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
-          <label className="font-semibold block mb-1">Select Date</label>
-          <input
-            type="date"
-            value={selectedDate}
-            onChange={handleChange(setSelectedDate)}
-            className="p-2 border rounded w-full"
-          />
+          <label className="block font-semibold mb-1">Select Date</label>
+          <input type="date" value={selectedDate} onChange={handleChange(setSelectedDate)} className="p-2 border rounded w-full" />
         </div>
 
         <div>
-          <label className="font-semibold">First Round</label>
-          <input
-            type="number"
-            value={firstRound}
-            onChange={handleChange(setFirstRound)}
-            className="w-24 p-2 border rounded mt-1"
-            required
-          />
+          <label className="block font-semibold mb-1">First Round</label>
+          <input type="number" value={firstRound} onChange={handleChange(setFirstRound)} className="p-2 border rounded w-full" required />
         </div>
 
         <div>
-          <label className="font-semibold">Second Round</label>
-          <input
-            type="number"
-            value={secondRound}
-            onChange={handleChange(setSecondRound)}
-            className="w-24 p-2 border rounded mt-1"
-            required
-          />
+          <label className="block font-semibold mb-1">Second Round</label>
+          <input type="number" value={secondRound} onChange={handleChange(setSecondRound)} className="p-2 border rounded w-full" required />
         </div>
 
-        <button
-          type="submit"
-          disabled={loading}
-          className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded"
-        >
-          {loading ? 'Submitting...' : editMode ? 'Update Result' : 'Submit Result'}
-        </button>
+        <div className="flex items-end">
+          <button type="submit" disabled={loading} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded w-full">
+            {loading ? 'Submitting...' : editMode ? 'Update Result' : 'Submit Result'}
+          </button>
+        </div>
       </form>
 
-      <div className="mt-10">
+      <div className="mt-8">
         <h3 className="text-lg font-semibold mb-2">Bulk Upload (Format: YYYY-MM-DD,first,second)</h3>
         <textarea
-          rows={6}
+          rows={5}
           value={bulkInput}
           onChange={handleBulkInputChange}
           className="w-full p-2 border rounded"
@@ -301,13 +260,10 @@ export default function AddDailyResultForm() {
       </div>
 
       {editMode && todayDoc && (
-        <div className="mt-8">
-          <h4 className="text-md font-semibold mb-2">Existing Entry</h4>
+        <div className="mt-6 bg-gray-100 p-4 rounded shadow">
+          <h4 className="text-md font-semibold mb-2">Existing Entry for {selectedDate}</h4>
           <p>
-            Date: <strong>{selectedDate}</strong>
-            <br />
-            First Round: <strong>{todayDoc.firstRound}</strong>
-            <br />
+            First Round: <strong>{todayDoc.firstRound}</strong><br />
             Second Round: <strong>{todayDoc.secondRound}</strong>
           </p>
           <button
