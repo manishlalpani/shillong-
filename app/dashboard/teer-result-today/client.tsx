@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, ChangeEvent, FormEvent, useCallback } from 'react';
+import { useState, useEffect, useCallback, ChangeEvent, FormEvent } from 'react';
 import { db } from '@/lib/firebase';
 import {
   addDoc,
@@ -46,75 +46,106 @@ export default function AddDailyResultForm() {
   const [editMode, setEditMode] = useState(false);
   const [editDocId, setEditDocId] = useState<string | null>(null);
 
-  // Fetch latest date from Firestore on mount
+  // Initialize selectedDate to latest or today on mount
   useEffect(() => {
-    const getLatestDate = async () => {
-      const q = query(collection(db, 'teer_daily_results'), orderBy('date', 'desc'), limit(1));
-      const snapshot = await getDocs(q);
-      if (!snapshot.empty) {
-        const docSnap = snapshot.docs[0];
-        const latestDate = docSnap.data().date.toDate();
-        const latestDateStr = latestDate.toISOString().split('T')[0];
-        setSelectedDate(latestDateStr);
-      } else {
-        const today = new Date();
-        setSelectedDate(today.toISOString().split('T')[0]);
+    (async () => {
+      try {
+        const q = query(collection(db, 'teer_daily_results'), orderBy('date', 'desc'), limit(1));
+        const snapshot = await getDocs(q);
+        if (!snapshot.empty) {
+          const latestDoc = snapshot.docs[0];
+          const latestDate = latestDoc.data().date.toDate();
+          setSelectedDate(latestDate.toISOString().slice(0, 10));
+        } else {
+          setSelectedDate(new Date().toISOString().slice(0, 10));
+        }
+      } catch (error) {
+        console.error('Error fetching latest date:', error);
+        setSelectedDate(new Date().toISOString().slice(0, 10));
       }
-    };
-    getLatestDate();
+    })();
   }, []);
 
+  // Load cached data from localStorage
   const loadCache = useCallback((): CacheData | null => {
     if (typeof window === 'undefined') return null;
     try {
-      const cacheString = localStorage.getItem(STORAGE_KEY);
-      if (!cacheString) return null;
-      const cache: CacheData = JSON.parse(cacheString);
-      if (cache && cache.date === selectedDate) return cache;
+      const cacheStr = localStorage.getItem(STORAGE_KEY);
+      if (!cacheStr) return null;
+      const cache: CacheData = JSON.parse(cacheStr);
+      if (cache.date === selectedDate) return cache;
       return null;
     } catch {
       return null;
     }
   }, [selectedDate]);
 
-  const saveCache = (data: CacheData) => {
+  // Save to cache
+  const saveCache = useCallback((data: CacheData) => {
     if (typeof window === 'undefined') return;
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-  };
+  }, []);
 
+  // Fetch data by selectedDate
   const fetchDataByDate = useCallback(async () => {
-    const selected = new Date(selectedDate);
-    const start = new Date(selected.getFullYear(), selected.getMonth(), selected.getDate());
-    const end = new Date(selected.getFullYear(), selected.getMonth(), selected.getDate() + 1);
-    const startTS = Timestamp.fromDate(start);
-    const endTS = Timestamp.fromDate(end);
+    if (!selectedDate) return;
+    setLoading(true);
+    try {
+      const selected = new Date(selectedDate);
+      const start = new Date(selected.getFullYear(), selected.getMonth(), selected.getDate());
+      const end = new Date(selected.getFullYear(), selected.getMonth(), selected.getDate() + 1);
+      const startTS = Timestamp.fromDate(start);
+      const endTS = Timestamp.fromDate(end);
 
-    const q = query(
-      collection(db, 'teer_daily_results'),
-      where('date', '>=', startTS),
-      where('date', '<', endTS)
-    );
+      const q = query(
+        collection(db, 'teer_daily_results'),
+        where('date', '>=', startTS),
+        where('date', '<', endTS)
+      );
 
-    const snapshot = await getDocs(q);
-    if (!snapshot.empty) {
-      const docSnap: QueryDocumentSnapshot<DocumentData> = snapshot.docs[0];
-      const docData = { id: docSnap.id, ...docSnap.data() } as TeerDoc;
-      setTodayDoc(docData);
-      setFirstRound(docData.firstRound.toString());
-      setSecondRound(docData.secondRound.toString());
-      setEditMode(true);
-      setEditDocId(docData.id);
-      saveCache({ date: selectedDate, doc: docData, firstRound: docData.firstRound.toString(), secondRound: docData.secondRound.toString(), editMode: true, editDocId: docData.id });
-    } else {
-      setTodayDoc(null);
-      setFirstRound('');
-      setSecondRound('');
-      setEditMode(false);
-      setEditDocId(null);
-      saveCache({ date: selectedDate, doc: null, firstRound: '', secondRound: '', editMode: false, editDocId: null });
+      const snapshot = await getDocs(q);
+      if (!snapshot.empty) {
+        const docSnap: QueryDocumentSnapshot<DocumentData> = snapshot.docs[0];
+        const docData = { id: docSnap.id, ...docSnap.data() } as TeerDoc;
+
+        setTodayDoc(docData);
+        setFirstRound(docData.firstRound.toString());
+        setSecondRound(docData.secondRound.toString());
+        setEditMode(true);
+        setEditDocId(docData.id);
+
+        saveCache({
+          date: selectedDate,
+          doc: docData,
+          firstRound: docData.firstRound.toString(),
+          secondRound: docData.secondRound.toString(),
+          editMode: true,
+          editDocId: docData.id,
+        });
+      } else {
+        setTodayDoc(null);
+        setFirstRound('');
+        setSecondRound('');
+        setEditMode(false);
+        setEditDocId(null);
+
+        saveCache({
+          date: selectedDate,
+          doc: null,
+          firstRound: '',
+          secondRound: '',
+          editMode: false,
+          editDocId: null,
+        });
+      }
+    } catch (error) {
+      console.error('Error fetching data by date:', error);
+    } finally {
+      setLoading(false);
     }
-  }, [selectedDate]);
+  }, [selectedDate, saveCache]);
 
+  // When selectedDate changes, load from cache or fetch fresh
   useEffect(() => {
     if (!selectedDate) return;
     const cachedData = loadCache();
@@ -129,32 +160,49 @@ export default function AddDailyResultForm() {
     }
   }, [selectedDate, fetchDataByDate, loadCache]);
 
-  const handleChange = (setter: React.Dispatch<React.SetStateAction<string>>) => (e: ChangeEvent<HTMLInputElement>) => setter(e.target.value);
+  // Handlers
+  const handleChange =
+    (setter: React.Dispatch<React.SetStateAction<string>>) =>
+    (e: ChangeEvent<HTMLInputElement>) =>
+      setter(e.target.value);
+
   const handleBulkInputChange = (e: ChangeEvent<HTMLTextAreaElement>) => setBulkInput(e.target.value);
 
   const handleBulkUpload = async () => {
-    const lines = bulkInput.split('\n');
+    if (!bulkInput.trim()) return alert('Bulk input is empty.');
+
+    const lines = bulkInput.trim().split('\n');
     setLoading(true);
+
     try {
-      for (const line of lines) {
-        const [dateStr, round1, round2] = line.trim().split(',');
-        if (!dateStr || !round1 || !round2) continue;
-        const date = new Date(dateStr);
-        const dateTS = Timestamp.fromDate(date);
-        const num1 = parseInt(round1.trim());
-        const num2 = parseInt(round2.trim());
-        if (!isNaN(num1) && !isNaN(num2)) {
+      // Using Promise.all to parallelize firestore writes could be faster but beware of rate limits
+      await Promise.all(
+        lines.map(async (line) => {
+          const [dateStr, round1, round2] = line.trim().split(',');
+          if (!dateStr || !round1 || !round2) return;
+
+          const date = new Date(dateStr);
+          if (isNaN(date.getTime())) return;
+
+          const num1 = parseInt(round1.trim());
+          const num2 = parseInt(round2.trim());
+
+          if (isNaN(num1) || isNaN(num2)) return;
+
           await addDoc(collection(db, 'teer_daily_results'), {
-            date: dateTS,
+            date: Timestamp.fromDate(date),
             firstRound: num1,
             secondRound: num2,
           });
-        }
-      }
+        })
+      );
+
       alert('Bulk data uploaded successfully!');
       setBulkInput('');
-    } catch (err) {
-      console.error(err);
+      // Refresh data for current selectedDate in case uploaded matches
+      fetchDataByDate();
+    } catch (error) {
+      console.error('Bulk upload error:', error);
       alert('Error uploading bulk data.');
     } finally {
       setLoading(false);
@@ -163,15 +211,24 @@ export default function AddDailyResultForm() {
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
+
     const num1 = parseInt(firstRound);
     const num2 = parseInt(secondRound);
+
     if (isNaN(num1) || isNaN(num2)) {
       alert('Enter valid numbers for both rounds.');
       return;
     }
-    const dateTS = Timestamp.fromDate(new Date(selectedDate));
+
+    if (!selectedDate) {
+      alert('Select a valid date.');
+      return;
+    }
+
     setLoading(true);
     try {
+      const dateTS = Timestamp.fromDate(new Date(selectedDate));
+
       if (editMode && editDocId) {
         await updateDoc(doc(db, 'teer_daily_results', editDocId), {
           date: dateTS,
@@ -188,8 +245,8 @@ export default function AddDailyResultForm() {
         alert('Result added successfully!');
       }
       await fetchDataByDate();
-    } catch (err) {
-      console.error(err);
+    } catch (error) {
+      console.error('Submit error:', error);
       alert('Error submitting data.');
     } finally {
       setLoading(false);
@@ -199,18 +256,32 @@ export default function AddDailyResultForm() {
   const handleDelete = async () => {
     if (!todayDoc) return;
     if (!confirm('Are you sure you want to delete this result?')) return;
+
+    setLoading(true);
     try {
       await deleteDoc(doc(db, 'teer_daily_results', todayDoc.id));
       alert('Result deleted successfully!');
+
+      // Reset form state and cache
       setTodayDoc(null);
       setFirstRound('');
       setSecondRound('');
       setEditMode(false);
       setEditDocId(null);
-      saveCache({ date: selectedDate, doc: null, firstRound: '', secondRound: '', editMode: false, editDocId: null });
-    } catch (err) {
-      console.error(err);
+
+      saveCache({
+        date: selectedDate,
+        doc: null,
+        firstRound: '',
+        secondRound: '',
+        editMode: false,
+        editDocId: null,
+      });
+    } catch (error) {
+      console.error('Delete error:', error);
       alert('Error deleting document.');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -221,58 +292,86 @@ export default function AddDailyResultForm() {
       <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
           <label className="block font-semibold mb-1">Select Date</label>
-          <input type="date" value={selectedDate} onChange={handleChange(setSelectedDate)} className="p-2 border rounded w-full" />
+          <input
+            type="date"
+            value={selectedDate}
+            onChange={handleChange(setSelectedDate)}
+            className="p-2 border rounded w-full"
+            max={new Date().toISOString().slice(0, 10)}
+          />
         </div>
 
         <div>
-          <label className="block font-semibold mb-1">First Round</label>
-          <input type="number" value={firstRound} onChange={handleChange(setFirstRound)} className="p-2 border rounded w-full" required />
+          <label className="block font-semibold mb-1">First Round Result</label>
+          <input
+            type="number"
+            value={firstRound}
+            onChange={handleChange(setFirstRound)}
+            className="p-2 border rounded w-full"
+            min={0}
+            max={99}
+            required
+          />
         </div>
 
         <div>
-          <label className="block font-semibold mb-1">Second Round</label>
-          <input type="number" value={secondRound} onChange={handleChange(setSecondRound)} className="p-2 border rounded w-full" required />
+          <label className="block font-semibold mb-1">Second Round Result</label>
+          <input
+            type="number"
+            value={secondRound}
+            onChange={handleChange(setSecondRound)}
+            className="p-2 border rounded w-full"
+            min={0}
+            max={99}
+            required
+          />
         </div>
 
-        <div className="flex items-end">
-          <button type="submit" disabled={loading} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded w-full">
-            {loading ? 'Submitting...' : editMode ? 'Update Result' : 'Submit Result'}
+        <div className="flex items-center space-x-4">
+          <button
+            type="submit"
+            disabled={loading}
+            className="bg-blue-600 text-white px-4 py-2 rounded disabled:opacity-50"
+          >
+            {editMode ? 'Update Result' : 'Add Result'}
           </button>
+
+          {editMode && (
+            <button
+              type="button"
+              disabled={loading}
+              onClick={handleDelete}
+              className="bg-red-600 text-white px-4 py-2 rounded disabled:opacity-50"
+            >
+              Delete
+            </button>
+          )}
         </div>
       </form>
 
-      <div className="mt-8">
-        <h3 className="text-lg font-semibold mb-2">Bulk Upload (Format: YYYY-MM-DD,first,second)</h3>
+      <hr className="my-8" />
+
+      <div>
+        <h3 className="text-2xl font-semibold mb-2">Bulk Upload</h3>
+        <p className="mb-2 text-gray-600">Enter data in CSV format: <code>YYYY-MM-DD,firstRound,secondRound</code> each per line</p>
         <textarea
-          rows={5}
+          rows={6}
           value={bulkInput}
           onChange={handleBulkInputChange}
-          className="w-full p-2 border rounded"
-          placeholder="Example:\n2024-06-01,23,45\n2024-06-02,56,12"
+          className="w-full p-2 border rounded resize-y"
+          placeholder="2023-06-12,11,75\n2023-06-13,25,64"
         />
         <button
           onClick={handleBulkUpload}
-          disabled={loading}
-          className="mt-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded"
+          disabled={loading || !bulkInput.trim()}
+          className="mt-3 bg-green-600 text-white px-4 py-2 rounded disabled:opacity-50"
         >
-          {loading ? 'Uploading...' : 'Upload Bulk Data'}
+          Upload Bulk Data
         </button>
       </div>
 
-      {editMode && todayDoc && (
-        <div className="mt-6 bg-gray-100 p-4 rounded shadow">
-          <h4 className="text-md font-semibold mb-2">Existing Entry for {selectedDate}</h4>
-          <p>
-            First Round: <strong>{todayDoc.firstRound}</strong><br />
-            Second Round: <strong>{todayDoc.secondRound}</strong>
-          </p>
-          <button
-            onClick={handleDelete}
-            className="mt-2 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded"
-          >
-            Delete Entry
-          </button>
-        </div>
+      {loading && (
+        <div className="mt-4 text-center font-semibold text-blue-600">Processing...</div>
       )}
     </div>
   );

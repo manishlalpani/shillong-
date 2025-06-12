@@ -2,7 +2,7 @@ import React from 'react'
 import { collection, getDocs, orderBy, query } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 
-export const revalidate = 86400 // 24 hours in seconds
+export const revalidate = 60 // 24 hours in seconds
 
 interface TeerItem {
   id: string
