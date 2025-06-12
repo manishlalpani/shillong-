@@ -3,7 +3,7 @@ import { doc, getDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import TeerResultTodayClient from './client';
 
-export const revalidate = 3600; // Revalidate every hour instead of daily for more up-to-date results
+export const revalidate = 60; // Revalidate every hour
 
 interface TeerResultData {
   firstRound: number[];
@@ -12,23 +12,21 @@ interface TeerResultData {
 }
 
 export default async function TeerResultTodayPage() {
-  // Get today's date in ISO format (YYYY-MM-DD)
   const todayISO = new Date().toISOString().split('T')[0];
-  
-  // Fetch data server-side for initial render
+
   let initialData: TeerResultData | null = null;
-  
+
   try {
     const docRef = doc(db, 'teer_daily_results', todayISO);
     const docSnap = await getDoc(docRef);
-    
+
     if (docSnap.exists()) {
       const data = docSnap.data();
       initialData = {
-        firstRound: Array.isArray(data.firstRound) 
-          ? data.firstRound.map(Number) 
-          : data.firstRound !== undefined 
-            ? [Number(data.firstRound)] 
+        firstRound: Array.isArray(data.firstRound)
+          ? data.firstRound.map(Number)
+          : data.firstRound !== undefined
+            ? [Number(data.firstRound)]
             : [],
         secondRound: Array.isArray(data.secondRound)
           ? data.secondRound.map(Number)
@@ -39,8 +37,7 @@ export default async function TeerResultTodayPage() {
       };
     }
   } catch (error) {
-    console.error('Error fetching initial data:', error);
-    // Continue with null initialData
+    console.error('Error fetching initial Teer result:', error);
   }
 
   return <TeerResultTodayClient initialData={initialData} />;

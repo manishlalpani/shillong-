@@ -1,6 +1,7 @@
 'use client';
 
 import SignOutButton from '@/app/(Auth)/SignOutButton';
+import RevalidateButton from '@/components/revalidateButton';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
@@ -47,6 +48,11 @@ export default function Sidebar() {
             );
           })}
         </nav>
+
+         {/* Revalidate Button */}
+        <div className="mt-6">
+          <RevalidateButton />
+        </div>
 
         {/* Sign Out Button */}
         <div className="mt-8">

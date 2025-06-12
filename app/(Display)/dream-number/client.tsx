@@ -1,8 +1,5 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { db } from "@/lib/firebase";
-import { collection, getDocs, Timestamp } from "firebase/firestore";
 import { Card, CardContent } from "@/components/ui/card";
 import {
   Table,
@@ -19,48 +16,10 @@ interface DreamEntry {
   direct: string;
   house: string;
   ending: string;
-  createdAt?: Timestamp | null;
+  createdAt: number; // already converted to number
 }
 
-export default function DreamNumbersPage() {
-  const [entries, setEntries] = useState<DreamEntry[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    const fetchEntries = async () => {
-      try {
-        const snapshot = await getDocs(collection(db, "dreams"));
-        const tempEntries: DreamEntry[] = [];
-
-        snapshot.forEach((doc) => {
-          const data = doc.data();
-          tempEntries.push({
-            id: doc.id,
-            dream: data.dream || "",
-            direct: data.direct || "",
-            house: data.house || "",
-            ending: data.ending || "",
-            createdAt: data.createdAt || null,
-          });
-        });
-
-        const sorted = tempEntries.sort((a, b) => {
-          const aTime = a.createdAt?.seconds || 0;
-          const bTime = b.createdAt?.seconds || 0;
-          return bTime - aTime;
-        });
-
-        setEntries(sorted);
-      } catch (error) {
-        console.error("Error fetching dream entries:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchEntries();
-  }, []);
-
+export default function DreamNumbersPage({ data }: { data: DreamEntry[] }) {
   return (
     <main className="max-w-5xl mx-auto py-10 px-4">
       <h1 className="text-3xl font-bold mb-6">Dream Number Entries</h1>
@@ -80,13 +39,7 @@ export default function DreamNumbersPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {loading ? (
-                <TableRow>
-                  <TableCell colSpan={4} className="text-center py-6">
-                    Loading...
-                  </TableCell>
-                </TableRow>
-              ) : entries.length === 0 ? (
+              {data.length === 0 ? (
                 <TableRow>
                   <TableCell
                     colSpan={4}
@@ -96,7 +49,7 @@ export default function DreamNumbersPage() {
                   </TableCell>
                 </TableRow>
               ) : (
-                entries.map((entry) => (
+                data.map((entry) => (
                   <TableRow key={entry.id}>
                     <TableCell className="whitespace-pre-line max-w-sm break-words">
                       {entry.dream}

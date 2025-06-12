@@ -1,56 +1,18 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { db } from '@/lib/firebase';
-import { collection, getDocs, query, orderBy, Timestamp } from 'firebase/firestore';
+import { useState } from 'react';
 
 interface TeerResult {
   id: string;
-  date: Timestamp;
+  date: Date | null;
   firstRound: number[];
   secondRound: number[];
 }
 
-export default function PreviousResultsPage() {
-  const [results, setResults] = useState<TeerResult[]>([]);
+export default function PreviousResultsView({ serverResults }: { serverResults: TeerResult[] }) {
   const [searchDate, setSearchDate] = useState('');
   const [filteredResult, setFilteredResult] = useState<TeerResult | null>(null);
   const [searchDone, setSearchDone] = useState(false);
-  const [loading, setLoading] = useState(false);
-
-  useEffect(() => {
-    const fetchAllResults = async () => {
-      setLoading(true);
-      try {
-        const q = query(collection(db, 'teer_daily_results'), orderBy('date', 'desc'));
-        const snapshot = await getDocs(q);
-        const data: TeerResult[] = snapshot.docs.map(doc => {
-          const raw = doc.data();
-          return {
-            id: doc.id,
-            date: raw.date instanceof Timestamp ? raw.date : Timestamp.fromDate(new Date()), // fallback
-            firstRound: Array.isArray(raw.firstRound)
-              ? raw.firstRound.map(Number)
-              : raw.firstRound !== undefined
-              ? [Number(raw.firstRound)]
-              : [],
-            secondRound: Array.isArray(raw.secondRound)
-              ? raw.secondRound.map(Number)
-              : raw.secondRound !== undefined
-              ? [Number(raw.secondRound)]
-              : [],
-          };
-        });
-        setResults(data);
-      } catch (error) {
-        console.error('Error fetching teer results:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchAllResults();
-  }, []);
 
   const handleDateSearch = () => {
     if (!searchDate) {
@@ -60,13 +22,12 @@ export default function PreviousResultsPage() {
     }
 
     const dateObj = new Date(searchDate);
-    const filtered = results.find(r => {
-      if (!(r.date instanceof Timestamp)) return false;
-      const resultDate = r.date.toDate();
+    const filtered = serverResults.find((r) => {
+      if (!r.date) return false;
       return (
-        resultDate.getFullYear() === dateObj.getFullYear() &&
-        resultDate.getMonth() === dateObj.getMonth() &&
-        resultDate.getDate() === dateObj.getDate()
+        r.date.getFullYear() === dateObj.getFullYear() &&
+        r.date.getMonth() === dateObj.getMonth() &&
+        r.date.getDate() === dateObj.getDate()
       );
     });
 
@@ -81,15 +42,14 @@ export default function PreviousResultsPage() {
         <input
           type="date"
           value={searchDate}
-          onChange={e => setSearchDate(e.target.value)}
+          onChange={(e) => setSearchDate(e.target.value)}
           className="border border-gray-300 rounded px-4 py-2 w-full sm:w-64"
         />
         <button
           onClick={handleDateSearch}
           className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded w-full sm:w-auto"
-          disabled={loading}
         >
-          {loading ? 'Loading...' : 'Search'}
+          Search
         </button>
       </div>
 
@@ -99,7 +59,7 @@ export default function PreviousResultsPage() {
             <div className="bg-green-100 border border-green-300 p-4 rounded text-green-800">
               <p className="font-medium mb-1">
                 <span className="font-semibold">Date:</span>{' '}
-                {filteredResult.date.toDate().toLocaleDateString()}
+                {filteredResult.date?.toLocaleDateString()}
               </p>
               <p>
                 <strong>First Round:</strong> {filteredResult.firstRound.join(', ')}

@@ -16,7 +16,7 @@ interface TeerResultTodayClientProps {
 }
 
 const CACHE_KEY = 'teerResultToday';
-const CACHE_EXPIRY = 1000 * 60 * 15; // 15 minutes in milliseconds
+const CACHE_EXPIRY = 1000 * 60 * 15; // 15 minutes
 
 const TeerResultTodayClient: React.FC<TeerResultTodayClientProps> = ({ initialData = null }) => {
   const [result, setResult] = useState<TeerResultData | null>(initialData);
@@ -37,7 +37,6 @@ const TeerResultTodayClient: React.FC<TeerResultTodayClientProps> = ({ initialDa
         }
       }
 
-      // Query Firestore using the `date` field (type Timestamp)
       const today = new Date();
       const startOfDay = new Date(today.setHours(0, 0, 0, 0));
       const endOfDay = new Date(today.setHours(23, 59, 59, 999));
@@ -75,26 +74,28 @@ const TeerResultTodayClient: React.FC<TeerResultTodayClientProps> = ({ initialDa
           timestamp: now,
         }));
       } else {
-        setResult(null); // no result found
+        setResult(null);
       }
 
     } catch (error) {
-      console.error('Error fetching data:', error);
+      console.error('Error fetching Teer data:', error);
     } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    if (initialData) {
+    const now = Date.now();
+    const cachedString = localStorage.getItem(CACHE_KEY);
+
+    if (initialData && (!cachedString || now - JSON.parse(cachedString).timestamp >= CACHE_EXPIRY)) {
       localStorage.setItem(CACHE_KEY, JSON.stringify({
         data: initialData,
-        timestamp: Date.now()
+        timestamp: now
       }));
-      return;
+    } else if (!initialData) {
+      fetchData();
     }
-
-    fetchData();
   }, [initialData, fetchData]);
 
   if (loading) {
