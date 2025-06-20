@@ -20,6 +20,7 @@
     "cloudinary": "^2.6.1",
     "clsx": "^2.1.1",
     "firebase": "^11.7.1",
+    "firebase-admin": "^13.4.0",
     "framer-motion": "^12.15.0",
     "lucide-react": "^0.509.0",
     "next": "^15.3.3",
@@ -40,12 +41,9 @@
     "tw-animate-css": "^1.2.9",
     "typescript": "^5"
   },
-"resolutions": {
-  "@next/swc-darwin-x64": "latest",
-  "@next/swc-linux-x64-gnu": "latest", 
-  "@next/swc-win32-x64-msvc": "latest"
+  "resolutions": {
+    "@next/swc-darwin-x64": "latest",
+    "@next/swc-linux-x64-gnu": "latest",
+    "@next/swc-win32-x64-msvc": "latest"
+  }
 }
-
-}
-
-

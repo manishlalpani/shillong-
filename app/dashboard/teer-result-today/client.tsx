@@ -100,7 +100,8 @@ export default function AddDailyResultForm() {
       const q = query(
         collection(db, 'teer_daily_results'),
         where('date', '>=', startTS),
-        where('date', '<', endTS)
+        where('date', '<', endTS),
+        limit(1)  // Adding limit to speed up query
       );
 
       const snapshot = await getDocs(q);
@@ -148,6 +149,7 @@ export default function AddDailyResultForm() {
   // When selectedDate changes, load from cache or fetch fresh
   useEffect(() => {
     if (!selectedDate) return;
+
     const cachedData = loadCache();
     if (cachedData) {
       setTodayDoc(cachedData.doc);
@@ -175,27 +177,32 @@ export default function AddDailyResultForm() {
     setLoading(true);
 
     try {
-      // Using Promise.all to parallelize firestore writes could be faster but beware of rate limits
-      await Promise.all(
-        lines.map(async (line) => {
-          const [dateStr, round1, round2] = line.trim().split(',');
-          if (!dateStr || !round1 || !round2) return;
+      // Batch writes to Firestore can be faster and reduce network overhead
+      // But Firestore batch limits 500 ops, so chunk if needed
+      const BATCH_SIZE = 500;
+      for (let i = 0; i < lines.length; i += BATCH_SIZE) {
+        const batchLines = lines.slice(i, i + BATCH_SIZE);
+        await Promise.all(
+          batchLines.map(async (line) => {
+            const [dateStr, round1, round2] = line.trim().split(',');
+            if (!dateStr || !round1 || !round2) return;
 
-          const date = new Date(dateStr);
-          if (isNaN(date.getTime())) return;
+            const date = new Date(dateStr);
+            if (isNaN(date.getTime())) return;
 
-          const num1 = parseInt(round1.trim());
-          const num2 = parseInt(round2.trim());
+            const num1 = parseInt(round1.trim());
+            const num2 = parseInt(round2.trim());
 
-          if (isNaN(num1) || isNaN(num2)) return;
+            if (isNaN(num1) || isNaN(num2)) return;
 
-          await addDoc(collection(db, 'teer_daily_results'), {
-            date: Timestamp.fromDate(date),
-            firstRound: num1,
-            secondRound: num2,
-          });
-        })
-      );
+            await addDoc(collection(db, 'teer_daily_results'), {
+              date: Timestamp.fromDate(date),
+              firstRound: num1,
+              secondRound: num2,
+            });
+          })
+        );
+      }
 
       alert('Bulk data uploaded successfully!');
       setBulkInput('');
@@ -327,11 +334,11 @@ export default function AddDailyResultForm() {
           />
         </div>
 
-        <div className="flex items-center space-x-4">
+        <div className="flex items-end gap-2">
           <button
             type="submit"
             disabled={loading}
-            className="bg-blue-600 text-white px-4 py-2 rounded disabled:opacity-50"
+            className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 disabled:opacity-50 w-full"
           >
             {editMode ? 'Update Result' : 'Add Result'}
           </button>
@@ -339,9 +346,9 @@ export default function AddDailyResultForm() {
           {editMode && (
             <button
               type="button"
-              disabled={loading}
               onClick={handleDelete}
-              className="bg-red-600 text-white px-4 py-2 rounded disabled:opacity-50"
+              disabled={loading}
+              className="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700 disabled:opacity-50"
             >
               Delete
             </button>
@@ -349,30 +356,28 @@ export default function AddDailyResultForm() {
         </div>
       </form>
 
-      <hr className="my-8" />
+      <hr className="my-6" />
 
       <div>
-        <h3 className="text-2xl font-semibold mb-2">Bulk Upload</h3>
-        <p className="mb-2 text-gray-600">Enter data in CSV format: <code>YYYY-MM-DD,firstRound,secondRound</code> each per line</p>
+        <h3 className="text-xl font-semibold mb-2">Bulk Upload (Date,FirstRound,SecondRound)</h3>
         <textarea
           rows={6}
           value={bulkInput}
           onChange={handleBulkInputChange}
-          className="w-full p-2 border rounded resize-y"
-          placeholder="2023-06-12,11,75\n2023-06-13,25,64"
+          placeholder="2024-06-12,11,12&#10;2024-06-13,21,22"
+          className="w-full p-2 border rounded resize-none"
+          disabled={loading}
         />
         <button
           onClick={handleBulkUpload}
-          disabled={loading || !bulkInput.trim()}
-          className="mt-3 bg-green-600 text-white px-4 py-2 rounded disabled:opacity-50"
+          disabled={loading}
+          className="mt-2 bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 disabled:opacity-50"
         >
           Upload Bulk Data
         </button>
       </div>
 
-      {loading && (
-        <div className="mt-4 text-center font-semibold text-blue-600">Processing...</div>
-      )}
+      {loading && <p className="mt-4 text-center font-semibold">Loading...</p>}
     </div>
   );
 }
