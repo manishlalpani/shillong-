@@ -1,3 +1,4 @@
+'use server'
 import React from 'react'
 import { collection, getDocs, orderBy, query } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
