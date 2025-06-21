@@ -12,11 +12,6 @@ interface TeerResult {
   row2: number[];
   createdAt: string;
   updatedAt: string;
-  previousResults?: Array<{
-    date: string;
-    row1: number[];
-    row2: number[];
-  }>;
 }
 
 interface TeerFormProps {
@@ -35,11 +30,6 @@ const TeerForm: React.FC<TeerFormProps> = ({ initialData = null }) => {
   const [row1, setRow1] = useState<string[]>(['', '', '']);
   const [row2, setRow2] = useState<string[]>(['', '', '']);
   const [currentResult, setCurrentResult] = useState<TeerResult | null>(null);
-  const [previousResults, setPreviousResults] = useState<Array<{
-    date: string;
-    row1: number[];
-    row2: number[];
-  }>>([]);
 
   useEffect(() => {
     if (initialData) {
@@ -63,11 +53,6 @@ const TeerForm: React.FC<TeerFormProps> = ({ initialData = null }) => {
         } else {
           setRow1(data.row1.map(String));
           setRow2(data.row2.map(String));
-        }
-
-        // Initialize previousResults if they exist
-        if (data.previousResults) {
-          setPreviousResults(data.previousResults);
         }
       }
     } catch (error) {
@@ -101,54 +86,29 @@ const TeerForm: React.FC<TeerFormProps> = ({ initialData = null }) => {
     try {
       const now = new Date().toISOString();
       const updateData: Partial<TeerResult> = {
+        date: today,
         row1: parsedRow1,
         row2: parsedRow2,
         updatedAt: now,
       };
 
       if (currentResult) {
-        // If it's a new day, archive the previous result
-        if (currentResult.date !== today) {
-          updateData.date = today;
-          updateData.createdAt = now;
-          
-          const newPreviousResults = [
-            {
-              date: currentResult.date,
-              row1: currentResult.row1,
-              row2: currentResult.row2,
-            },
-            ...(currentResult.previousResults || [])
-          ].slice(0, 30); // Keep only the last 30 results
-
-          updateData.previousResults = newPreviousResults;
-          setPreviousResults(newPreviousResults);
-        }
-
         await updateDoc(doc(db, 'teerResults', CURRENT_RESULT_DOC_ID), updateData);
       } else {
-        // First time saving
         await setDoc(doc(db, 'teerResults', CURRENT_RESULT_DOC_ID), {
-          date: today,
-          row1: parsedRow1,
-          row2: parsedRow2,
+          ...updateData,
           createdAt: now,
-          updatedAt: now,
-          previousResults: [],
         });
       }
 
-      // Update local state
-      const newResult = {
+      setCurrentResult({
         date: today,
         row1: parsedRow1,
         row2: parsedRow2,
         createdAt: currentResult?.createdAt || now,
         updatedAt: now,
-        previousResults: updateData.previousResults || currentResult?.previousResults || [],
-      };
+      });
 
-      setCurrentResult(newResult);
       alert('Result saved successfully!');
     } catch (error) {
       console.error('Error saving result:', error);
@@ -204,34 +164,6 @@ const TeerForm: React.FC<TeerFormProps> = ({ initialData = null }) => {
       >
         Save Result
       </button>
-
-      <h3 className="text-xl font-semibold mt-12 mb-4 text-gray-900 border-b pb-2">
-        Previous Results
-      </h3>
-      <div className="max-h-56 overflow-y-auto pr-3 space-y-3 scrollbar-thin scrollbar-thumb-blue-400 scrollbar-track-gray-200">
-        {previousResults.length > 0 ? (
-          previousResults.map((result, index) => (
-            <div
-              key={`${result.date}-${index}`}
-              className="text-sm p-3 border border-gray-300 rounded-lg bg-white shadow-sm hover:shadow-md transition-shadow duration-200"
-            >
-              <div className="flex justify-between items-center">
-                <time className="font-semibold text-gray-800">{result.date}</time>
-              </div>
-              <div className="mt-1 text-gray-700">
-                <p>
-                  <span className="font-medium">Row 1:</span> {result.row1.join(', ')}
-                </p>
-                <p>
-                  <span className="font-medium">Row 2:</span> {result.row2.join(', ')}
-                </p>
-              </div>
-            </div>
-          ))
-        ) : (
-          <p className="text-gray-500 text-sm italic text-center">No previous results found.</p>
-        )}
-      </div>
     </div>
   );
 };
