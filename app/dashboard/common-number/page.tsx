@@ -32,7 +32,7 @@ export default async function CreatePage() {
 
   return (
     <div className="container mx-auto py-8">
-      <h1 className="text-2xl font-bold mb-6 text-center">Teer Results Management</h1>
+      
       <TeerForm initialData={initialData} />
     </div>
   );

@@ -11,11 +11,13 @@ interface TeerItem {
 }
 
 async function getTeerData(): Promise<TeerItem[]> {
-  const q = query(collection(db, 'teer_results'), orderBy('createdAt', 'desc'))
+  // Use the correct collection name ("teerResults" instead of "teer_results")
+  const q = query(collection(db, 'teerResults'), orderBy('createdAt', 'desc'))
   const snapshot = await getDocs(q)
   const data: TeerItem[] = snapshot.docs.map((doc) => ({
     id: doc.id,
-    ...(doc.data() as Omit<TeerItem, 'id'>),
+    row1: doc.data().row1 || [],
+    row2: doc.data().row2 || [],
   }))
   return data
 }
