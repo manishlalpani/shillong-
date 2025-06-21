@@ -1,30 +1,30 @@
+// components/RefreshButton.tsx
+'use client'
 
+import { useTransition } from 'react'
+import { refreshNow } from '@/app/actions/revalidate'
 
-import { useTransition, useState } from 'react';
-import { revalidateTeerResultPage } from '@/app/actions/revalidate';
-
-export default function RevalidateButton() {
-  const [isPending, startTransition] = useTransition();
-  const [status, setStatus] = useState('');
-
+export default function RefreshButton() {
+  const [isPending, startTransition] = useTransition()
+  
   const handleClick = () => {
     startTransition(async () => {
-      await revalidateTeerResultPage();
-      setStatus('✅ Revalidated!');
-      setTimeout(() => setStatus(''), 2000);
-    });
-  };
+      const result = await refreshNow()
+      if (result.success) {
+        window.location.reload() // Optional: force immediate refresh
+      }
+    })
+  }
 
   return (
-    <div>
-      <button
-        onClick={handleClick}
-        className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition"
-        disabled={isPending}
-      >
-        {isPending ? 'Revalidating...' : 'Revalidate Page'}
-      </button>
-      {status && <p className="text-sm text-green-500 mt-2">{status}</p>}
-    </div>
-  );
+    <button
+      onClick={handleClick}
+      disabled={isPending}
+      className={`px-4 py-2 rounded text-white ${
+        isPending ? 'bg-gray-400' : 'bg-green-500 hover:bg-green-600'
+      }`}
+    >
+      {isPending ? 'Refreshing...' : 'Refresh Now'}
+    </button>
+  )
 }

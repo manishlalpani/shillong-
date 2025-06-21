@@ -2,7 +2,9 @@ import DreamNumbersPage from "./client";
 import { db } from "@/lib/firebase";
 import { collection, getDocs } from "firebase/firestore";
 
-export const revalidate = 60; // ISR: revalidate every 60 seconds
+// Update these exports at the top of your file
+export const dynamic = 'force-dynamic';  // Disables all caching
+export const revalidate = 0;            // Equivalent to no cache
 
 export default async function Page() {
   const snapshot = await getDocs(collection(db, "dreams"));
@@ -15,7 +17,7 @@ export default async function Page() {
       direct: d.direct ?? "",
       house: d.house ?? "",
       ending: d.ending ?? "",
-      createdAt: d.createdAt?.seconds ?? 0, // convert Timestamp to number
+      createdAt: d.createdAt?.seconds ?? 0,
     };
   }).sort((a, b) => b.createdAt - a.createdAt);
 

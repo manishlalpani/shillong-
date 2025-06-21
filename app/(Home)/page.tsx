@@ -1,3 +1,6 @@
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 import CommonNumber from "@/app/(Home)/common-client";
 import Link from "next/link";
 import FooterFAQSection from "../Faq/page";

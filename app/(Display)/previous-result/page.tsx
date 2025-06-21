@@ -4,7 +4,9 @@ import { db } from "@/lib/firebase";
 import { collection, getDocs, query, orderBy, limit } from "firebase/firestore";
 import PreviousResultsView from "./client";
 
-export const revalidate = 60; // ISR every 60 seconds
+// Update these exports at the top of your file
+export const dynamic = 'force-dynamic';  // Disables all caching
+export const revalidate = 0;            // Equivalent to no cache
 
 export default async function PreviousResultsPage() {
   const q = query(

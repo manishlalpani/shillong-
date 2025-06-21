@@ -1,17 +1,19 @@
-// app/actions/revalidate.js
+// app/actions/revalidate.ts (add to existing file)
 'use server'
 
 import { revalidatePath } from 'next/cache'
 
-export async function refreshData() {
+// Instant revalidation for all pages
+export async function refreshNow() {
   try {
-    // Add ALL pages that need updating:
-    revalidatePath('/dream-number')
-    revalidatePath('/teer-result-today')
-    revalidatePath('/previous-result')
+    // Revalidate all important paths
+    revalidatePath('/dream-number', 'layout')
+    revalidatePath('/teer-result-today', 'layout')
+    revalidatePath('/previous-result', 'layout')
+     revalidatePath('/', 'layout')
     
-    return { success: true }
+    return { success: true, timestamp: Date.now() }
   } catch (error) {
-    return { success: false }
+    return { success: false, error: error.message }
   }
 }

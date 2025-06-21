@@ -3,7 +3,9 @@ import { doc, getDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import TeerResultTodayClient from './client';
 
-export const revalidate = 60; // Revalidate every hour
+// Update these exports at the top of your file
+export const dynamic = 'force-dynamic';  // Disables all caching
+export const revalidate = 0;            // Equivalent to no cache
 
 interface TeerResultData {
   firstRound: number[];
