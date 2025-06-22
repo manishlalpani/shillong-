@@ -14,8 +14,6 @@ import {
   updateDoc,
   orderBy,
   limit,
-  QueryDocumentSnapshot,
-  DocumentData,
 } from 'firebase/firestore';
 
 const STORAGE_KEY = 'teerDailyResultCache';
@@ -34,6 +32,7 @@ type CacheData = {
   secondRound: string;
   editMode: boolean;
   editDocId: string | null;
+  allResults: TeerDoc[];
 };
 
 export default function AddDailyResultForm() {
@@ -45,25 +44,22 @@ export default function AddDailyResultForm() {
   const [todayDoc, setTodayDoc] = useState<TeerDoc | null>(null);
   const [editMode, setEditMode] = useState(false);
   const [editDocId, setEditDocId] = useState<string | null>(null);
+  const [allResults, setAllResults] = useState<TeerDoc[]>([]);
 
-  // Initialize selectedDate to latest or today on mount
+  // Get current date in local timezone
+  const getCurrentDate = () => {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  // Initialize selectedDate to today on mount
   useEffect(() => {
-    (async () => {
-      try {
-        const q = query(collection(db, 'teer_daily_results'), orderBy('date', 'desc'), limit(1));
-        const snapshot = await getDocs(q);
-        if (!snapshot.empty) {
-          const latestDoc = snapshot.docs[0];
-          const latestDate = latestDoc.data().date.toDate();
-          setSelectedDate(latestDate.toISOString().slice(0, 10));
-        } else {
-          setSelectedDate(new Date().toISOString().slice(0, 10));
-        }
-      } catch (error) {
-        console.error('Error fetching latest date:', error);
-        setSelectedDate(new Date().toISOString().slice(0, 10));
-      }
-    })();
+    const today = getCurrentDate();
+    setSelectedDate(today);
+    fetchAllResults();
   }, []);
 
   // Load cached data from localStorage
@@ -72,19 +68,38 @@ export default function AddDailyResultForm() {
     try {
       const cacheStr = localStorage.getItem(STORAGE_KEY);
       if (!cacheStr) return null;
-      const cache: CacheData = JSON.parse(cacheStr);
-      if (cache.date === selectedDate) return cache;
-      return null;
+      return JSON.parse(cacheStr);
     } catch {
       return null;
     }
-  }, [selectedDate]);
+  }, []);
 
   // Save to cache
-  const saveCache = useCallback((data: CacheData) => {
+  const saveCache = useCallback((data: Partial<CacheData>) => {
     if (typeof window === 'undefined') return;
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-  }, []);
+    const currentCache = loadCache() || {} as CacheData;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...currentCache, ...data }));
+  }, [loadCache]);
+
+  // Fetch all results for the list view
+  const fetchAllResults = useCallback(async () => {
+    setLoading(true);
+    try {
+      const q = query(collection(db, 'teer_daily_results'), orderBy('date', 'desc'));
+      const snapshot = await getDocs(q);
+      const results = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as TeerDoc[];
+      
+      setAllResults(results);
+      saveCache({ allResults: results });
+    } catch (error) {
+      console.error('Error fetching all results:', error);
+    } finally {
+      setLoading(false);
+    }
+  }, [saveCache]);
 
   // Fetch data by selectedDate
   const fetchDataByDate = useCallback(async () => {
@@ -101,12 +116,12 @@ export default function AddDailyResultForm() {
         collection(db, 'teer_daily_results'),
         where('date', '>=', startTS),
         where('date', '<', endTS),
-        limit(1)  // Adding limit to speed up query
+        limit(1)
       );
 
       const snapshot = await getDocs(q);
       if (!snapshot.empty) {
-        const docSnap: QueryDocumentSnapshot<DocumentData> = snapshot.docs[0];
+        const docSnap = snapshot.docs[0];
         const docData = { id: docSnap.id, ...docSnap.data() } as TeerDoc;
 
         setTodayDoc(docData);
@@ -151,7 +166,7 @@ export default function AddDailyResultForm() {
     if (!selectedDate) return;
 
     const cachedData = loadCache();
-    if (cachedData) {
+    if (cachedData && cachedData.date === selectedDate) {
       setTodayDoc(cachedData.doc);
       setFirstRound(cachedData.firstRound);
       setSecondRound(cachedData.secondRound);
@@ -177,8 +192,6 @@ export default function AddDailyResultForm() {
     setLoading(true);
 
     try {
-      // Batch writes to Firestore can be faster and reduce network overhead
-      // But Firestore batch limits 500 ops, so chunk if needed
       const BATCH_SIZE = 500;
       for (let i = 0; i < lines.length; i += BATCH_SIZE) {
         const batchLines = lines.slice(i, i + BATCH_SIZE);
@@ -206,8 +219,8 @@ export default function AddDailyResultForm() {
 
       alert('Bulk data uploaded successfully!');
       setBulkInput('');
-      // Refresh data for current selectedDate in case uploaded matches
       fetchDataByDate();
+      fetchAllResults();
     } catch (error) {
       console.error('Bulk upload error:', error);
       alert('Error uploading bulk data.');
@@ -252,6 +265,7 @@ export default function AddDailyResultForm() {
         alert('Result added successfully!');
       }
       await fetchDataByDate();
+      await fetchAllResults();
     } catch (error) {
       console.error('Submit error:', error);
       alert('Error submitting data.');
@@ -269,7 +283,6 @@ export default function AddDailyResultForm() {
       await deleteDoc(doc(db, 'teer_daily_results', todayDoc.id));
       alert('Result deleted successfully!');
 
-      // Reset form state and cache
       setTodayDoc(null);
       setFirstRound('');
       setSecondRound('');
@@ -284,6 +297,49 @@ export default function AddDailyResultForm() {
         editMode: false,
         editDocId: null,
       });
+
+      await fetchAllResults();
+    } catch (error) {
+      console.error('Delete error:', error);
+      alert('Error deleting document.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleEditResult = (result: TeerDoc) => {
+    const date = result.date.toDate();
+    const dateStr = date.toISOString().split('T')[0];
+    
+    setSelectedDate(dateStr);
+    setFirstRound(result.firstRound.toString());
+    setSecondRound(result.secondRound.toString());
+    setEditMode(true);
+    setEditDocId(result.id);
+    setTodayDoc(result);
+    
+    // Scroll to the form
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleDeleteResult = async (id: string) => {
+    if (!confirm('Are you sure you want to delete this result?')) return;
+
+    setLoading(true);
+    try {
+      await deleteDoc(doc(db, 'teer_daily_results', id));
+      alert('Result deleted successfully!');
+      
+      // If we're deleting the currently displayed doc, reset the form
+      if (editDocId === id) {
+        setFirstRound('');
+        setSecondRound('');
+        setEditMode(false);
+        setEditDocId(null);
+        setTodayDoc(null);
+      }
+      
+      await fetchAllResults();
     } catch (error) {
       console.error('Delete error:', error);
       alert('Error deleting document.');
@@ -293,10 +349,10 @@ export default function AddDailyResultForm() {
   };
 
   return (
-    <div className="p-4 max-w-2xl mx-auto">
+    <div className="p-4 max-w-4xl mx-auto">
       <h2 className="text-3xl font-bold mb-6 text-center">Teer Result Entry</h2>
 
-      <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
         <div>
           <label className="block font-semibold mb-1">Select Date</label>
           <input
@@ -304,7 +360,7 @@ export default function AddDailyResultForm() {
             value={selectedDate}
             onChange={handleChange(setSelectedDate)}
             className="p-2 border rounded w-full"
-            max={new Date().toISOString().slice(0, 10)}
+            max={getCurrentDate()}
           />
         </div>
 
@@ -356,9 +412,7 @@ export default function AddDailyResultForm() {
         </div>
       </form>
 
-      <hr className="my-6" />
-
-      <div>
+      <div className="mb-8">
         <h3 className="text-xl font-semibold mb-2">Bulk Upload (Date,FirstRound,SecondRound)</h3>
         <textarea
           rows={6}
@@ -375,6 +429,71 @@ export default function AddDailyResultForm() {
         >
           Upload Bulk Data
         </button>
+      </div>
+
+      <div className="mt-8">
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="text-xl font-semibold">All Results</h3>
+          <button
+            onClick={fetchAllResults}
+            disabled={loading}
+            className="bg-gray-600 text-white px-3 py-1 rounded hover:bg-gray-700 disabled:opacity-50 text-sm"
+          >
+            Refresh
+          </button>
+        </div>
+        
+        <div className="overflow-x-auto">
+          <table className="min-w-full bg-white border">
+            <thead>
+              <tr className="bg-gray-100">
+                <th className="py-2 px-4 border">Date</th>
+                <th className="py-2 px-4 border">First Round</th>
+                <th className="py-2 px-4 border">Second Round</th>
+                <th className="py-2 px-4 border">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {allResults.length === 0 && (
+                <tr>
+                  <td colSpan={4} className="py-4 text-center text-gray-500">
+                    {loading ? 'Loading...' : 'No results found'}
+                  </td>
+                </tr>
+              )}
+              {allResults.map((result) => {
+                const date = result.date.toDate();
+                const dateStr = date.toLocaleDateString('en-US', {
+                  year: 'numeric',
+                  month: 'short',
+                  day: 'numeric'
+                });
+                
+                return (
+                  <tr key={result.id} className="hover:bg-gray-50">
+                    <td className="py-2 px-4 border text-center">{dateStr}</td>
+                    <td className="py-2 px-4 border text-center">{result.firstRound}</td>
+                    <td className="py-2 px-4 border text-center">{result.secondRound}</td>
+                    <td className="py-2 px-4 border text-center">
+                      <button
+                        onClick={() => handleEditResult(result)}
+                        className="bg-blue-500 text-white px-2 py-1 rounded mr-2 hover:bg-blue-600 text-sm"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        onClick={() => handleDeleteResult(result.id)}
+                        className="bg-red-500 text-white px-2 py-1 rounded hover:bg-red-600 text-sm"
+                      >
+                        Delete
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       {loading && <p className="mt-4 text-center font-semibold">Loading...</p>}

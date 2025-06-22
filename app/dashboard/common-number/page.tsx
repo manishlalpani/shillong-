@@ -26,7 +26,7 @@ export default async function CreatePage() {
     initialData = {
       row1: data.row1 || [0, 0, 0],
       row2: data.row2 || [0, 0, 0],
-      docId: docSnap.id,
+      docId: docSnap.id, 
     };
   }
 
